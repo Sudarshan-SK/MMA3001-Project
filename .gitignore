@@ -1,0 +1,18 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Pytest / coverage cache
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Colab / OS files
+.DS_Store
+.directory
