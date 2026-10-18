@@ -1,5 +1,3 @@
-
-
 """Air density models used  to simulate the parachute descent.
 
 The atmosphere is defined by a density (rho). A constant-density model, and an ISA model is used and compared.
@@ -16,7 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from constants import G0, R_AIR, LAPSE_RATE, P0_STD, T0_STD, H_TROPOPAUSE
+from src.constants import G0, R_AIR, LAPSE_RATE, P0_STD, T0_STD, H_TROPOPAUSE
 
 
 # Defining the lowest altitude possible, and is slightly negative so errors are not raised
