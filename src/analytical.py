@@ -44,43 +44,43 @@ def terminal_velocity(mass, cds, rho, g=G0):
 
 # Function for the speed and distance
 def analytic_fall(t, mass, cds, rho, g=G0):
-    """
-    Function: Calculate the exact speed and distance fallen for a drag-limited fall from rest.
+  """
+  Function: Calculate the exact speed and distance fallen for a drag-limited fall from rest.
 
-    Parameters:
-    t: float or numpy.ndarray
-      Time since release [s], t >= 0.
-    mass: float
-      Suspended mass [kg]. Must be positive.
-    cds: float
-      Drag area Cd * S [m^2]. Must be positive.
-    rho: float
-      Air density [kg/m^3]. Must be positive.
-    g: float, optional
-      Gravitational acceleration [m/s^2]. Default: G0.
+  Parameters:
+  t: float or numpy.ndarray
+    Time since release [s], t >= 0.
+  mass: float
+    Suspended mass [kg]. Must be positive.
+  cds: float
+    Drag area Cd * S [m^2]. Must be positive.
+  rho: float
+    Air density [kg/m^3]. Must be positive.
+  g: float, optional
+    Gravitational acceleration [m/s^2]. Default: G0.
 
-    Returns:
-    speed_down: float or numpy.ndarray
-      Downward speed [m/s].
-    drop: float or numpy.ndarray
-      Distance fallen [m] (positive).
+  Returns:
+  speed_down: float or numpy.ndarray
+    Downward speed [m/s].
+  drop: float or numpy.ndarray
+    Distance fallen [m] (positive).
 
-    Raises:
-    ValueError
-      If any time value in t is negative.
-    """
-    v_t = terminal_velocity(mass, cds, rho, g)
-    t_arr = np.asarray(t, dtype=float)
+  Raises:
+  ValueError
+    If any time value in t is negative.
+  """
+  v_t = terminal_velocity(mass, cds, rho, g)
+  t_arr = np.asarray(t, dtype=float)
 
-    if np.any(t_arr < 0):
-      raise ValueError(f"t must be non-negative, got min: {np.min(t_arr)}")
+  if np.any(t_arr < 0):
+    raise ValueError(f"t must be non-negative, got min: {np.min(t_arr)}")
 
-    arg = (g * t_arr) / v_t
-    speed_down = v_t * np.tanh(arg)
+  arg = (g * t_arr) / v_t
+  speed_down = v_t * np.tanh(arg)
 
-    log_cosh = np.logaddexp(arg, -arg) - np.log(2.0)
-    drop = (v_t**2 / g) * log_cosh
+  log_cosh = np.logaddexp(arg, -arg) - np.log(2.0)
+  drop = (v_t**2 / g) * log_cosh
 
-    if t_arr.ndim == 0:
-      return float(speed_down), float(drop)
-    return speed_down, drop
+  if t_arr.ndim == 0:
+    return float(speed_down), float(drop)
+  return speed_down, drop
