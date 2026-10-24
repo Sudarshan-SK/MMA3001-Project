@@ -31,13 +31,13 @@ def terminal_velocity(mass, cds, rho, g=G0):
     If mass, cds, rho, or g is not positive.
   """
   if not (mass > 0):
-    raise ValueError(f"mass must be positive, got {mass}")
+    raise ValueError(f"mass must be positive")
   if not (cds > 0):
-    raise ValueError(f"cds must be positive, got {cds}")
+    raise ValueError(f"cds must be positive")
   if not (rho > 0):
-    raise ValueError(f"rho must be positive, got {rho}")
+    raise ValueError(f"rho must be positive")
   if not (g > 0):
-    raise ValueError(f"g must be positive, got {g}")
+    raise ValueError(f"g must be positive")
 
   return float(np.sqrt(2.0 * mass * g / (rho * cds)))
 
@@ -70,17 +70,12 @@ def analytic_fall(t, mass, cds, rho, g=G0):
     If any time value in t is negative.
   """
   v_t = terminal_velocity(mass, cds, rho, g)
-  t_arr = np.asarray(t, dtype=float)
-
-  if np.any(t_arr < 0):
-    raise ValueError(f"t must be non-negative, got min: {np.min(t_arr)}")
-
-  arg = (g * t_arr) / v_t
-  speed_down = v_t * np.tanh(arg)
-
-  log_cosh = np.logaddexp(arg, -arg) - np.log(2.0)
-  drop = (v_t**2 / g) * log_cosh
-
-  if t_arr.ndim == 0:
+  t = np.asarray(t, dtype=float)
+  if np.any(t < 0):
+    raise ValueError(f"t must be non-negative")
+  x = g * t / v_t
+  speed_down = v_t * np.tanh(x)
+  drop = (v_t**2 / g) * (np.logaddexp(x, -x) - np.log(2.0))
+  if t.ndim == 0:
     return float(speed_down), float(drop)
   return speed_down, drop
