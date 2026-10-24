@@ -42,17 +42,17 @@ def _check_altitude(h, h_max):
 
   # Raising error if altitude is NaN
   if np.any(np.isnan(h_arr)):
-    raise ValueError(f"altitude contains NaN: {h}")
+    raise ValueError(f"altitude contains NaN")
 
   # Raising error if altitude is below the minimum
   if np.any(h_arr < H_MIN):
     min_val = np.min(h_arr)
-    raise ValueError(f"altitude below minimum bound H_MIN ({H_MIN} m): got {min_val}")
+    raise ValueError(f"altitude below minimum bound")
 
   # Raising error if altitude is above the maximum
   if np.any(h_arr > h_max):
     max_val = np.max(h_arr)
-    raise ValueError(f"altitude above maximum bound h_max ({h_max} m): got {max_val}")
+    raise ValueError(f"altitude above maximum bound h_max")
 
 
 # Function to define the constant atmosphere model
@@ -68,12 +68,12 @@ class ConstantAtmosphere:
   """
   
   # Defining the air density value
-  rho = 1.225
+  rho: float = 1.225
 
   # Ensuring air density is possitive
   def __post_init__(self):
     if not (self.rho > 0):
-      raise ValueError(f"rho must be positive, got {self.rho}")
+      raise ValueError(f"rho must be positive")
 
   # Returning the value for the air density with the same shape as the altitude
   def density(self, h):
@@ -106,31 +106,31 @@ class ISAAtmosphere:
   """
 
   # Defining parameters at ground level
-  p0 = P0_STD
-  T0 = T0_STD
+  p0: float = P0_STD
+  T0: float = T0_STD
 
   # Ensuring values are positive and valid.
   def __post_init__(self):
     if not (self.p0 > 0):
-      raise ValueError(f"p0 must be positive and non-NaN, got {self.p0}")
+      raise ValueError(f"p0 must be positive and non-NaN")
     if not (self.T0 > 0):
-      raise ValueError(f"T0 must be positive and non-NaN, got {self.T0}")
+      raise ValueError(f"T0 must be positive and non-NaN")
 
-  # Defining the air temperature in K at an altitude h above the pad in m.
+  # Defining the air temperature at an altitude h above the pad.
   def temperature(self, h):
     _check_altitude(h, H_TROPOPAUSE)
     h_arr = np.asarray(h, dtype=float)
     t = self.T0 - LAPSE_RATE * h_arr
     return float(t) if t.ndim == 0 else t
 
-  # Defining the air pressure in Pa at an altitude h above the pad in m.
+  # Defining the air pressure at an altitude h above the pad.
   def pressure(self, h):
     t = self.temperature(h)
     exponent = G0 / (R_AIR * LAPSE_RATE)
     p = self.p0 * (t / self.T0) ** exponent
     return float(p) if isinstance(p, np.ndarray) and p.ndim == 0 else p
 
-  # Defining the air density in kg/m^3 at an altitude h above the pad in m.
+  # Defining the air density at an altitude h above the pad.
   def density(self, h):
     t = self.temperature(h)
     p = self.pressure(h)
