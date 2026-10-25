@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 
 # Function to forward step through the Euler method
-def euler_step(f, t, y, h, args):
+def euler_step(f, t, y, h, *args):
   """
   Function to advance one step with the forward (explicit) Euler method
   
