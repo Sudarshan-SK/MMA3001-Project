@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from atmosphere import ISAAtmosphere
-from constants import G0
-from wind import ConstantWind
+from src.atmosphere import ISAAtmosphere
+from src.constants import G0
+from src.wind import ConstantWind
 
 # Class to describe the parachute
 @dataclass(frozen=True)
