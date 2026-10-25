@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
 
-from constants import G0, LAPSE_RATE, R_AIR
+from src.constants import G0, LAPSE_RATE, R_AIR
 
 # Timestamps
 WRAP_S = 2**32 / 1e6
