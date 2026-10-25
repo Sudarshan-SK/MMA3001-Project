@@ -176,7 +176,7 @@ def _batch_rhs(Y, mass, cds_d, cds_m, main_alt, atmosphere, wind, scale, rot, g,
   rel = Y[:, 3:6] - np.column_stack([u, v, np.zeros_like(u)])
   speed = np.sqrt(np.einsum("ij,ij->i", rel, rel))
   cds = np.where(z > main_alt, cds_d, cds_m)
-  k = -0.5 * atmosphere.density(z_air, validate=not optimised) * cds * speed / mass
+  k = -0.5 * atmosphere.density(z_air) * cds * speed / mass
   acc = rel * k[:, None]
   acc[:, 2] -= g
   return np.column_stack([Y[:, 3:6], acc])
@@ -293,6 +293,20 @@ def landing_ellipse(points, chi2=CHI2_2DOF_95):
     cov
 
   """
+  points = np.asarray(points, dtype=float)
+
+  if points.ndim != 2 or points.shape[1] != 2:
+    raise ValueError("points must have shape (n, 2)")
+
+  if points.shape[0] < 3:
+    raise ValueError("at least 3 points are required")
+
+  if not np.all(np.isfinite(points)):
+    raise ValueError("points must contain only finite values")
+
+  if np.linalg.matrix_rank(np.cov(points, rowvar=False)) < 2:
+    raise ValueError("points must have non-degenerate 2D spread")
+    
   p = np.asarray(points, dtype=float)
   cov = np.cov(p.T)
   vals, vecs = np.linalg.eigh(cov)
