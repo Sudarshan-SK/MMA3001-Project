@@ -10,6 +10,7 @@ T0 = temperature on the day
 This is done so that h = 0 is the pad, not sea level
 """
 
+# Using dataclass to be a concise way to store classes
 from dataclasses import dataclass
 
 import numpy as np
