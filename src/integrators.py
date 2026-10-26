@@ -53,10 +53,16 @@ def rk4_step(f, t, y, h, *args):
   numpy.ndarray
     state at t + h
   """
+  # Derivative at the start of an interval
   k1 = f(t, y, *args)
+  # Derivative at midpoint using first slope
   k2 = f(t + h / 2, y + h / 2 * k1, *args)
+  # Midpoint derivative refined using second slope
   k3 = f(t + h / 2, y + h / 2 * k2, *args)
+  # Derivative at end of interval using third slope
   k4 = f(t + h, y + h * k3, *args)
+
+  # Combining four slopes
   return y + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
@@ -111,8 +117,10 @@ def fixed_step_solve(f, t_span, y0, h, step=rk4_step, args=()):
     If ``h <= 0`` or ``t_end <= t0``.
   """
   t0, t_end = float(t_span[0]), float(t_span[1])
+  # Require a positive step size
   if not (h > 0):
     raise ValueError(f"step size h must be positive")
+  # Require a non-empty or forward interval
   if not (t_end > t0):
     raise ValueError(f"t_end must be greater than t0")
 
