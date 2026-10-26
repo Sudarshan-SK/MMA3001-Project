@@ -4,13 +4,14 @@
 # Setting up paths, imports and the plotting style
 import os, sys, json, time, cProfile, pstats, io, tracemalloc
 
+# Creating the repository and paths to important files
 sys.path.insert(0, REPO)
 DATA = "/content/MMA3001-Project/data/processed"
 RAW_GFC = os.path.join(REPO, "data", "raw", "Electronics Bay", "GFC")
 FIG = os.path.join(REPO, "reports", "figures")
 os.makedirs(FIG, exist_ok=True)
 
-
+# Importing libraries
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -28,6 +29,7 @@ def save(fig, name):
     fig.tight_layout()
     fig.savefig(os.path.join(FIG, name), bbox_inches="tight")
 
+# Importing values from relevant files in the src/ folder.
 from src.constants import G0
 from src.atmosphere import ISAAtmosphere, ConstantAtmosphere
 from src.wind import ConstantWind, ProfileWind, wind_components
@@ -41,16 +43,18 @@ from src import uncertainty as unc
 RESULTS = {}
 
 
-# Parameters
+# Defining the parameters used
 
 # These have been gathered from HPR data or using placeholder values
-
-MASS = 33.0
-PAD_T0 = 300.0
+MASS = 18.0 # kg
+PAD_T0 = 300.0 # K
 SURFACE_WIND = None
+# Drogue parachute configuration (size and Cd)
 DROGUE = Parachute("drogue", 0.9144, 1.3)
+# Main parachute configuration (size and Cd)
 MAIN = Parachute("main", 2.4384, 1.8)
 
+# Aproximate time interval for both parachute phases
 WINDOWS = {"drogue": (32.0, 163.0), "main": (175.0, 229.0)} # steady phases
 
 
@@ -60,10 +64,15 @@ RHO_TEST = 1.1
 const_atm, calm = ConstantAtmosphere(RHO_TEST), ConstantWind()
 def vertical_rhs(t, y):
   return descent_rhs(t, y, MASS, DROGUE.cds, const_atm, calm)
+
+# Initial state at altitude of 3000m
 y0_test = [0.0, 0.0, 3000.0, 0.0, 0.0, 0.0]
 
+# Calculating the analytical fall speed
 t_fine = np.linspace(0, 10, 400)
 v_exact, _ = analytic_fall(t_fine, MASS, DROGUE.cds, RHO_TEST)
+
+# Comparing the exact solution with Euler and RK4
 fig, ax = plt.subplots(figsize=(6, 3.6))
 ax.plot(t_fine, v_exact, color=INK, lw=2, label="exact: $v_t\\tanh(gt/v_t)$")
 for step, marker in [(euler_step, "o"), (rk4_step, "s")]:
@@ -73,12 +82,15 @@ ax.set(xlabel="time since release [s]", ylabel="downward speed [m/s]", title="Dr
 ax.legend()
 save(fig, "drogue_fall_from_rest_num_vs_exact.png")
 
-# Performing a convergence study
-# There is an error at t = 3s while the speed is still changing
 
+# Performing a convergence study
+# Repeating the integration with smaller steps
+# Measuring the error at t = 3s
 steps = np.array([0.2, 0.1, 0.05, 0.025, 0.0125, 0.00625])
 v3, _ = analytic_fall(3.0, MASS, DROGUE.cds, RHO_TEST)
 errors, orders = {}, {}
+
+# Calculating the terminal speed error for each step size
 for step in (euler_step, rk4_step):
   errors[step.__name__] = np.array([abs(-fixed_step_solve(vertical_rhs, (0, 3.0), y0_test, h, step=step).y[-1, 5] - v3)
                                     for h in steps])
@@ -86,11 +98,13 @@ for step in (euler_step, rk4_step):
   ok = errors[step.__name__] > 1e-12
   orders[step.__name__] = np.polyfit(np.log(steps[ok]), np.log(errors[step.__name__][ok]), 1)[0]
 
-# Same study measured near terminal velocity
+
+# Repeating the convergence measurement at t = 10s
 v10, _ = analytic_fall(10.0, MASS, DROGUE.cds, RHO_TEST)
 e10 = [abs(-fixed_step_solve(vertical_rhs, (0, 10.0), y0_test, h, step=euler_step).y[-1, 5] - v10) for h in steps[:4]]
 orders["euler_at_10s"] = np.polyfit(np.log(steps[:4]), np.log(e10), 1)[0]
 
+# Plotting errors on a logarithmic scale
 fig, ax = plt.subplots(figsize=(6, 3.8))
 for name, err in errors.items():
   ax.loglog(steps, err, "o-", label=f"{name}: observed order {orders[name]:.2f}")
@@ -106,18 +120,28 @@ RESULTS["descent_model"] = {"order_euler": orders["euler_step"], "order_rk4": or
 RESULTS["descent_model"]
 
 
-# Selecting the model and comparing ISA and constant density
+
+# Comparing atmosphereic models and ODE solver performance
+
+# Loading flight data
 baro, accel, gps, ev = load_processed(DATA)
 isa = ISAAtmosphere(p0=ev["pad_pressure_pa"], T0=PAD_T0)
+
+# Estimating the air density at the pad using the ISA model
 rho_pad = float(isa.density(0.0))
 start = [0.0, 0.0, 3583.0, 0.0, 0.0, 0.0]
 rows = []
+
+# Comparing the predicted mains deployment and landing times
 for label, atm_ in [("ISA, pad-anchored", isa), (f"constant {rho_pad:.3f} kg/m3", ConstantAtmosphere(rho_pad))]:
   r = simulate_descent(DescentConfig(MASS, DROGUE, MAIN, 456.0, atm_), start)
   rows.append((label, r.t_main, r.t_land, r.nfev))
 isa_table = pd.DataFrame(rows, columns=["atmosphere", "t_main [s]", "t_land [s]", "nfev"])
+
+# Saving results between constant-density and ISA scenario
 RESULTS["descent_model"]["isa_vs_constant_descent_time_diff_s"] = float(rows[1][2] - rows[0][2])
 
+# Benchmarking several adaptive ODE solver methods from SciPy
 solver_rows = []
 for method in ["RK45", "DOP853", "Radau", "BDF", "LSODA"]:
   t0 = time.perf_counter()
@@ -125,9 +149,10 @@ for method in ["RK45", "DOP853", "Radau", "BDF", "LSODA"]:
   solver_rows.append((method, r.nfev, time.perf_counter() - t0, r.t_land))
 descent_solvers = pd.DataFrame(solver_rows, columns=["method", "nfev", "time [s]", "t_land [s]"])
 RESULTS["descent_model"]["descent_solver_nfev"] = dict(zip(descent_solvers.method, descent_solvers.nfev))
-display(isa_table.round(2)); descent_solvers.round(4)
 
-
+# Displaying the atmosphereic comparison and solver benchmark tables
+display(isa_table.round(2));
+descent_solvers.round(4)
 
 
 
@@ -136,16 +161,24 @@ display(isa_table.round(2)); descent_solvers.round(4)
 atm = ISAAtmosphere(p0=ev["pad_pressure_pa"], T0=PAD_T0)
 baro["alt"] = altitude_from_pressure(baro.pressure, ev["pad_pressure_pa"], PAD_T0)
 gps["alt"] = gps.alt_gps - ev["pad_gps_alt_m"]
+
+# Selcting the second accelerometer stream and calculating the acceleration magnitude
 a2 = accel[accel.sensor == "ACCEL2"]
 a2_mag = np.sqrt(a2.ax**2 + a2.ay**2 + a2.az**2).to_numpy()
+
+# Detecting launch, and landing
 t_launch = detect_launch(a2.t.to_numpy(), a2_mag)
 t_apo, h_apo = detect_apogee(baro.t, baro.alt)
 t_land = detect_landing(baro.t, baro.alt, t_after=t_apo)
+
+# Comparing detected events with the events recorded by the flight computer
 events_table = pd.DataFrame({"detected [s]": [t_launch, t_apo, ev["logged"]["main"], t_land],
                              "GFC logged [s]": [0.0, ev["logged"]["drogue"], ev["logged"]["main"], ev["logged"]["landing"]]},
                             index=["launch", "apogee", "main release", "landing"])
 RESULTS["flight_data"] = {"t_apogee": t_apo, "h_apogee": h_apo, "t_land": t_land, "gfc_logged": ev["logged"]}
 
+
+# Plotting the two altitude sources alongside the accelerometer magnitude
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5.2), sharex=True)
 ax1.plot(baro.t, baro.alt, label=f"baro, from pressure (T0 = {PAD_T0:.0f} K)")
 ax1.plot(gps.t, gps.alt, ".", ms=3, label="GPS altitude")
@@ -162,11 +195,17 @@ save(fig, "flight_overview.png")
 events_table.round(2)
 
 
+
 # Comparing altitude results based on the source
+# Estimating GPS apogee from a time window around the expected apogee
 gps_apogee = float(gps[(gps.t > 20) & (gps.t < 35)].alt.max())
 rows = [("device-logged", float(baro.alt_agl_device.max()))]
+
+# Recalculating the barometric altitude for several assumed pad temperatures
 for T0 in [288.15, 295.0, 300.0, 305.0, 310.0]:
   rows.append((f"from pressure, T0 = {T0:.0f} K", float(altitude_from_pressure(baro.pressure, ev["pad_pressure_pa"], T0).max())))
+
+# Adding the GPS-based estimate which doesn't use barometric temperature
 rows.append(("GPS (independent of temperature)", gps_apogee))
 alt_table = pd.DataFrame(rows, columns=["altitude source", "apogee [m AGL]"])
 RESULTS["flight_data"].update({"apogee_device": rows[0][1], "apogee_gps": gps_apogee})
@@ -174,19 +213,32 @@ alt_table.round(0)
 
 
 # Descent-rate method selection
+# Estimating barometer noise
 noise_std = float(baro[baro.t < -1].alt.std())
+
+# Generating a synthetic altitude data with a predetermined descent rate
 rng = np.random.default_rng(0)
 t_syn = np.arange(0, 120, 1 / 14.5)
 h_syn = 3000 - 20 * t_syn + rng.normal(0, noise_std, t_syn.size)
+
+# Calculating the RMSE for the central difference method
 rows = [("central", "-", np.sqrt(np.nanmean((descent_rate(t_syn, h_syn, "central")[1] + 20) ** 2)))]
+
+# Comparing smoothing and local line fitting at different window durations
 for method in ["savgol", "linefit"]:
   for w in [0.5, 1, 2, 4, 8]:
     rows.append((method, w, np.sqrt(np.nanmean((descent_rate(t_syn, h_syn, method, window_s=w)[1] + 20) ** 2))))
 rate_table = pd.DataFrame(rows, columns=["method", "window [s]", "RMSE [m/s]"])
+
+# Selecting the line-fitting method
 METHOD, WINDOW = "linefit", 2.0
 t_v, v = descent_rate(baro.t, baro.alt, METHOD, window_s=WINDOW)
+
+# Interpolating altitude onto the descent-rate timestamps
 h_v = np.interp(t_v, baro.t, baro.alt)
 in_phase = {ph: (t_v > lo) & (t_v < hi) for ph, (lo, hi) in WINDOWS.items()}
+
+# Taking the median descent speed
 v_stage = {ph: float(-np.nanmedian(v[m])) for ph, m in in_phase.items()}
 RESULTS["flight_data"].update({"baro_noise_m": noise_std, "v_drogue": v_stage["drogue"], "v_main": v_stage["main"]})
 print(f"pad noise {noise_std:.2f} m; chosen {METHOD}, {WINDOW} s window; descent rates {v_stage}")
@@ -195,28 +247,47 @@ rate_table.round(3)
 
 
 
-
 # Comparing the Landing drift between the baseline and the model
+# Converting GPS coordinates to a local refernce with north/east references
 east, north = latlon_to_en(gps.lat, gps.lon, ev["pad_lat"], ev["pad_lon"])
 gps["east"], gps["north"] = east, north
+
+# Interpolating barometric altitude onto the GPS timestamps
 gps["alt_baro"] = np.interp(gps.t, baro.t, baro.alt)
+
+# Finding the GPS fix closest to apogee and estimating the final landing location
 apo = gps.iloc[(gps.t - t_apo).abs().argmin()]
 landing = gps[gps.t > t_land + 5][["east", "north"]].mean().to_numpy()
+
+# Calculating the displacement from the apogee to the estimated final landing location
 measured_drift = landing - np.array([apo.east, apo.north])
+
+# Developing a wind profile from GPS data
 descent_fixes = gps[(gps.t > t_apo + 3) & (gps.t < t_land)]
 gps_wind = gps_wind_profile(descent_fixes.t, descent_fixes.east, descent_fixes.north, descent_fixes.alt_baro, bin_m=250.0)
+
+# Finding the estimated altitude at mains deployment
 main_alt = float(np.interp(ev["logged"]["main"], baro.t, baro.alt))
 y0_apo = [0.0, 0.0, h_apo, 0.0, 0.0, 0.0]
 
+# Storing the predicted landing positions and full simulated ground track
 cases, tracks = {}, {}
+
+# Complting if the surface wind is available
 if SURFACE_WIND is not None:
   surface_uv, label_a = wind_components(*SURFACE_WIND), "A: hand calc, surface wind"
 else:
   surface_uv, label_a = np.array([gps_wind.u_east[0], gps_wind.v_north[0]]), "A*: hand calc, GPS stand-in wind"
+
+# Estimating drift using a simplified hand-calculation method
 cases[label_a] = hand_calc_drift(h_apo, main_alt, v_stage["drogue"], v_stage["main"], surface_uv)[0]
+
+# Simulating descent using provided Cd values and the GPS wind profile
 for label, (d_, m_) in {"E: ODE manufacturer CdS, GPS wind": (DROGUE, MAIN)}.items():
   r = simulate_descent(DescentConfig(MASS, d_, m_, main_alt, atm, gps_wind), y0_apo)
   cases[label], tracks[label] = r.landing_xy, r.y[:, :2]
+
+# Comparing predicted landing locations with measured displacement
 rows = []
 for label, xy in cases.items():
   e = landing_error(xy, measured_drift)
@@ -229,14 +300,19 @@ RESULTS["flight_data"]["drift"] = {"measured_m": float(np.hypot(*measured_drift)
                             "wind_low_ms": float(np.hypot(gps_wind.u_east[0], gps_wind.v_north[0])),
                             "wind_high_ms": float(np.hypot(gps_wind.u_east[-1], gps_wind.v_north[-1]))}
 
+# Plotting wind speed against altitude and comparing with measured GPS tracking
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), gridspec_kw={"width_ratios": [1, 2.4]})
 ax1.plot(np.hypot(gps_wind.u_east, gps_wind.v_north), gps_wind.heights, "o-")
 ax1.set(xlabel="wind speed [m/s]", ylabel="altitude AGL [m]", title="Wind from GPS drift")
+
+# Apogee is to be the local origin point
 ax2.plot(descent_fixes.east - apo.east, descent_fixes.north - apo.north, ".", color=INK, ms=3, label="GPS track")
 for i, (label, tr) in enumerate(tracks.items()):
-    ax2.plot(tr[:, 0], tr[:, 1], color=PALETTE[i], label=label)
+  ax2.plot(tr[:, 0], tr[:, 1], color=PALETTE[i], label=label)
 for i, (label, xy) in enumerate(cases.items()):
-    ax2.plot(*xy, "x", ms=8, mew=2, color=PALETTE[(i + 2) % 8] if i == 0 else PALETTE[i - 1])
+  ax2.plot(*xy, "x", ms=8, mew=2, color=PALETTE[(i + 2) % 8] if i == 0 else PALETTE[i - 1])
+
+# Marking the apogee, measured landing and hand-calculation prediction
 ax2.plot(0, 0, "^", color=INK, ms=7, label="apogee point")
 ax2.plot(*measured_drift, "*", color=INK, ms=12, label="measured landing")
 ax2.annotate(label_a.split(":")[0], cases[label_a], textcoords="offset points", xytext=(6, 4), color=INK)
@@ -249,20 +325,30 @@ drift_table.round(1)
 
 
 # Creating the Monte Carlo landing dispersion and analysis
+# Defining the parameters used by the model
 SPEC = unc.UncertaintySpec(mass=MASS, cds_drogue=DROGUE.cds, cds_main=MAIN.cds,
                            main_alt=main_alt, apogee_alt=h_apo)
 
 # Comparing accuracy and speed
+# Generating 50 samples using the same seed
 s50 = unc.sample_inputs(SPEC, 50, seed=1)
+
+# Benchmarking an ODE solver with a vectorised fixed-step implementation
 t_loop, loop50 = unc.best_time(lambda: unc.simulate_descent_loop(s50, atm, gps_wind, rtol=1e-8, atol=1e-8), repeats=1)
 t_batch, batch50 = unc.best_time(lambda: unc.simulate_descent_batch(s50, atm, gps_wind, h=0.1), repeats=3)
+
+# Comparing predicted landing locations in each sample
 miss = np.hypot(*(batch50["landing_xy"] - loop50["landing_xy"]).T)
+
+# Repeating the vectorised simulation to study numerical sensitivity with different time steps
 step_rows = []
 for h in [0.8, 0.4, 0.2, 0.1, 0.05, 0.025]:
   b = unc.simulate_descent_batch(s50, atm, gps_wind, h=h)
   step_rows.append((h, float(np.hypot(*(b["landing_xy"] - loop50["landing_xy"]).T).max())))
 step_table = pd.DataFrame(step_rows, columns=["h [s]", "max landing difference vs solve_ivp [m]"])
 order_batch = float(np.polyfit(np.log(step_table.iloc[:, 0]), np.log(step_table.iloc[:, 1]), 1)[0])
+
+# Measuring the execution time for the vectorised method for various sample counts
 scaling = []
 for n in [10, 100, 1000, 5000]:
   s_n = unc.sample_inputs(SPEC, n, seed=2)
@@ -272,6 +358,8 @@ scaling = pd.DataFrame(scaling, columns=["N", "vectorised [s]", "loop (extrapola
 RESULTS["monte_carlo"] = {"loop_s_per_sample": t_loop / 50, "batch_s_50": t_batch, "speedup_50": t_loop / t_batch,
                    "max_miss_vs_solve_ivp_m": float(miss.max()), "observed_order_batch": order_batch,
                    "scaling": scaling.to_dict("records")}
+
+# Plotting computational cost of the loop and vectorised method
 fig, ax = plt.subplots(figsize=(5.5, 3.4))
 ax.loglog(scaling.N, scaling["loop (extrapolated) [s]"], "o--", label="solve_ivp loop")
 ax.loglog(scaling.N, scaling["vectorised [s]"], "o-", label="vectorised RK4")
@@ -284,14 +372,21 @@ display(step_table.round(3)); scaling.round(3)
 
 
 # Landing ellipse and checking for Monte Carlo convergence
+# Using 5000 samples and a fixed seed
 N_MC = 5000
 mc = unc.simulate_descent_batch(unc.sample_inputs(SPEC, N_MC, seed=42), atm, gps_wind, h=0.1)
+
+# Fitting the landing dispersion ellipse and checking if the landing position is inside it
 ell = unc.landing_ellipse(mc["landing_xy"])
 inside = unc.inside_ellipse(measured_drift, ell)
+
+# Checking for convergence across various sample sizes and seeds
 Ns = [30, 100, 300, 1000, 3000]
 seeds = range(10)
 conv = np.array([[unc.landing_ellipse(unc.simulate_descent_batch(unc.sample_inputs(SPEC, n, seed=100 + k), atm, gps_wind,
                                                                     h=0.1)["landing_xy"])["semi_major"] for k in seeds] for n in Ns])
+
+# Calculating the relative sd
 spread = conv.std(axis=1) / conv.mean(axis=1)
 conv_slope = float(np.polyfit(np.log(Ns), np.log(spread), 1)[0])
 n_needed = int(np.ceil(Ns[0] * (spread[0] / 0.02) ** 2))     # from the 1/sqrt(N) law, for 2 % spread
@@ -300,6 +395,8 @@ RESULTS["monte_carlo"].update({"N_mc": N_MC, "ellipse_semi_major": ell["semi_maj
                         "measured_inside": inside, "convergence_slope": conv_slope, "n_for_2pct": n_needed,
                         "spread_at_N": dict(zip(map(str, Ns), spread.tolist()))})
 
+
+# Plotting the individual landing samples, 95% ellipse and measured landing location
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), gridspec_kw={"width_ratios": [1.6, 1]})
 ax1.plot(*mc["landing_xy"].T, ".", ms=1.2, alpha=0.35, color=PALETTE[0], label=f"{N_MC} Monte Carlo landings")
 ax1.plot(*unc.ellipse_outline(ell).T, color=PALETTE[1], lw=2, label="95 % ellipse")
@@ -326,20 +423,31 @@ def profile(fn, sort, n=8):
   out = prof.runcall(fn)
   buf = io.StringIO(); pstats.Stats(prof, stream=buf).sort_stats(sort).print_stats(n)
   return out, buf.getvalue()
+
+# Profiling the original vectorised implementation to see which functions consume the most time
 _, txt = profile(lambda: unc.simulate_descent_batch(s1000, atm, gps_wind, h=0.1, optimised=False), "tottime")
 print("ORIGINAL vectorised version, N = 1000, sorted by own time:")
 print(txt[txt.find("ncalls"):][:1500])
+
+# Repeating for the optimised implementation
 out, txt = profile(lambda: unc.simulate_descent_batch(s1000, atm, gps_wind, h=0.1), "tottime")
 print("OPTIMISED version:")
 print(txt[txt.find("ncalls"):][:1200])
+
+# Profiling on a smaller smaple set
 _, txt = profile(lambda: unc.simulate_descent_loop(unc.sample_inputs(SPEC, 10, seed=5), atm, gps_wind), "tottime")
 print("LOOP baseline, N = 10:")
 print(txt[txt.find("ncalls"):][:1200])
 
+# benchmarking both vectorised implementations
 t_orig, _ = unc.best_time(lambda: unc.simulate_descent_batch(s1000, atm, gps_wind, h=0.1, optimised=False), repeats=3)
 t_1000, _ = unc.best_time(lambda: unc.simulate_descent_batch(s1000, atm, gps_wind, h=0.1), repeats=3)
+
+# Estimating the achieved FP
 achieved = out["flops"] / t_1000
 tracemalloc.start(); unc.simulate_descent_batch(s1000, atm, gps_wind, h=0.1); peak_batch = tracemalloc.get_traced_memory()[1]; tracemalloc.stop()
+
+# Estimating the bytes
 bytes_per_rhs_per_sample = 20 * 6 * 8
 RESULTS["monte_carlo"].update({"flops_estimate_1000": out["flops"], "time_1000_s": t_1000, "time_1000_original_s": t_orig,
                         "achieved_flops": achieved, "peak_memory_batch_1000_MB": peak_batch / 1e6,
@@ -347,3 +455,63 @@ RESULTS["monte_carlo"].update({"flops_estimate_1000": out["flops"], "time_1000_s
 print(f"N=1000: original {t_orig:.2f} s -> optimised {t_1000:.2f} s ({100 * (1 - t_1000 / t_orig):.0f} % faster); "
       f"{out['flops']:.2e} FLOPs -> {achieved / 1e6:.0f} MFLOP/s; peak memory {peak_batch / 1e6:.1f} MB; "
       f"arithmetic intensity ~{unc.FLOPS_PER_RHS / bytes_per_rhs_per_sample:.2f} FLOP/byte")
+
+
+
+# Comparing simulation flight track with onboard data for validation
+
+# Setting an acceptance threshold of 5%
+ACCEPT_RATE_PCT = 5.0
+
+# Simulating a descent from the measured apogee altitude
+val = simulate_descent(DescentConfig(MASS, DROGUE, MAIN, main_alt, atm, ConstantWind()), y0_apo)
+
+# Timestamps start from launch
+t_sim = val.t + t_apo
+h_sim = val.y[:, 2]
+v_sim = -val.y[:, 5]
+val_rows = []
+
+# Comparing each model and measured descent rates
+for ph, (lo, hi) in WINDOWS.items():
+  m_sim = (t_sim > lo) & (t_sim < hi)
+  h_mid = np.median(h_v[in_phase[ph]])
+  v_pred = float(np.interp(-h_mid, -h_sim, v_sim))
+  err = 100 * (v_pred - v_stage[ph]) / v_stage[ph]
+  val_rows.append((f"{ph} descent rate at {h_mid:.0f} m [m/s]", v_pred, v_stage[ph], err,
+                    "pass" if abs(err) <= ACCEPT_RATE_PCT else "FAIL"))
+  
+# Comparing the simulated and logged mains deployment times
+t_main_meas = ev["logged"]["main"]
+val_rows.append(("time of main deployment [s]", val.t_main + t_apo, t_main_meas,
+                 100 * (val.t_main + t_apo - t_main_meas) / (t_main_meas - t_apo), ""))
+
+# Comparing the simulated and detected landing times
+val_rows.append(("time of landing [s]", val.t_land + t_apo, t_land,
+                 100 * (val.t_land + t_apo - t_land) / (t_land - t_apo), ""))
+validation_table = pd.DataFrame(val_rows, columns=["quantity", "model", "measured", "error [%]", f"within ±{ACCEPT_RATE_PCT:g} %"])
+
+# Calculating the altitude RMSE over the mains descent period
+sel = (baro.t > t_apo + 5) & (baro.t < t_land - 2)
+h_model_at_meas = np.interp(baro.t[sel], t_sim, h_sim)
+alt_rmse = float(np.sqrt(np.mean((h_model_at_meas - baro.alt[sel]) ** 2)))
+
+# Calculating the mass implied by the measured steady descent rate
+implied_mass = {ph: 0.5 * float(atm.density(np.median(h_v[in_phase[ph]]))) * ch.cds * v_stage[ph] ** 2 / G0
+                for ph, ch in [("drogue", DROGUE), ("main", MAIN)]}
+RESULTS["validation"] = {"rows": val_rows, "alt_rmse_m": alt_rmse, "implied_mass": implied_mass}
+ 
+# Plotting the measured barometer altitude data and the modelled descent trajectory
+fig, ax = plt.subplots(figsize=(7.5, 3.6))
+ax.plot(baro.t, baro.alt, color=INK, lw=1, label="measured (baro, from pressure)")
+ax.plot(t_sim, h_sim, color=PALETTE[1], lw=1.6, label=f"model, manufacturer Cd, m = {MASS:g} kg")
+ax.axvline(t_main_meas, color=MUTED, ls=":", lw=1)
+ax.set(xlabel="time since launch [s]", ylabel="altitude AGL [m]", xlim=(t_apo - 5, max(t_land, t_sim[-1]) + 5),
+       title="Descent: model vs flight data")
+ax.legend()
+save(fig, "descent_validation.png")
+
+# Printing the overally altitude error and implied masses
+print(f"altitude RMSE {alt_rmse:.0f} m; implied mass from rates: {implied_mass}")
+validation_table.round(2)
+ 
