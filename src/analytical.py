@@ -1,3 +1,5 @@
+
+
 """
 File for the exact solutions used to verify the numerical code for a simplified problem.
 
@@ -30,6 +32,7 @@ def terminal_velocity(mass, cds, rho, g=G0):
   ValueError:
     If mass, cds, rho, or g is not positive.
   """
+  # Checking that the physical parameters are positive for validity
   if not (mass > 0):
     raise ValueError(f"mass must be positive")
   if not (cds > 0):
@@ -69,12 +72,23 @@ def analytic_fall(t, mass, cds, rho, g=G0):
   ValueError
     If any time value in t is negative.
   """
+  # Calculating the terminal velocity
   v_t = terminal_velocity(mass, cds, rho, g)
+
+  # Converting the input time to a NumPy FP array
   t = np.asarray(t, dtype=float)
+
+  # Rejecting negative times
   if np.any(t < 0):
     raise ValueError(f"t must be non-negative")
+
+  # Defining a dimensionless time variable for a simplied analytical expression for velocity and distance
   x = g * t / v_t
+
+  # Downward speed
   speed_down = v_t * np.tanh(x)
+
+  # Distance fallen from the release point
   drop = (v_t**2 / g) * (np.logaddexp(x, -x) - np.log(2.0))
   if t.ndim == 0:
     return float(speed_down), float(drop)
