@@ -164,10 +164,6 @@ def _trim(df, t_launch):
 def make_processed_data(gfc_dir, out_dir):
   """Converting the raw GFC folder into the trimmed files committed to the repo.
 
-  Writes ``gfc_baro.csv``, ``gfc_accel.csv``, ``gfc_gps.csv`` and
-  ``events.json`` to ``out_dir``. All times are seconds after the launch
-  time logged by the GFC; all values are SI.
-
   Parameters
   gfc_dir: str
     Folder containing BARO.CSV, ACCEL.CSV, GPS.CSV, STATE.CSV.
