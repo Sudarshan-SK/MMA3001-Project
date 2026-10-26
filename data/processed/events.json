@@ -1,0 +1,14 @@
+{
+  "description": "GFC state-machine event times in s after launch; pad reference values.",
+  "logged": {
+    "burnout": 7.102,
+    "drogue": 25.604,
+    "main": 169.02,
+    "landing": 236.358
+  },
+  "main_alt_agl_device_m": 456.08,
+  "pad_pressure_pa": 99438.2,
+  "pad_lat": -30.660131,
+  "pad_lon": 143.195267,
+  "pad_gps_alt_m": 223.0
+}
