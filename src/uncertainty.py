@@ -13,7 +13,7 @@ from src.constants import G0
 from src.descent import DescentConfig, Parachute, simulate_descent
 from src.wind import ConstantWind, PowerLawWind, ProfileWind, wind_components
 
-#: chi-squared quantile with 2 degrees of freedom for a 95 % ellipse: -2 ln(1 - 0.95).
+#: chi-squared quantile with 2 degrees of freedom for a 95 % ellipse.
 CHI2_2DOF_95 = 5.991464547107979
 
 #: Floating-point operations in one vectorised descent right-hand-side evaluation, per sample
@@ -62,11 +62,14 @@ class UncertaintySpec:
   sigma_apogee_xy: float = 3.0
 
   def __post_init__(self):
+    # Require positive values
     for name in ("mass", "cds_drogue", "cds_main", "apogee_alt"):
       if not (getattr(self, name) > 0):
         raise ValueError(f"{name} must be positive")
+      # Mains deployment between pad and below apogee
     if not (0 <= self.main_alt < self.apogee_alt):
       raise ValueError("need 0 <= main_alt < apogee_alt")
+    # Rejecting negative uncertainty values
     for name, value in self.__dict__.items():
       if name.startswith("sigma") and not (value >= 0):
         raise ValueError(f"{name} must be >= 0")
@@ -91,6 +94,8 @@ def sample_inputs(spec, n, seed=0):
   """
   if n < 1:
     raise ValueError("n must be >= 1")
+
+  # Generating a seed for reproducability
   rng = np.random.default_rng(seed)
   normal = lambda mean, sd: mean + sd * rng.standard_normal(n)
   return {
@@ -369,4 +374,3 @@ def best_time(fn, repeats=3):
       out = fn()
       best = min(best, time.perf_counter() - t0)
   return best, out
-
