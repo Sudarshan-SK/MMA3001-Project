@@ -32,12 +32,15 @@ class Parachute:
   diameter: float
   cd: float
 
+  # Validating the parachute dimensions and drag coefficient
   def __post_init__(self):
     if not (self.diameter > 0):
       raise ValueError(f"diameter must be positive, got {self.diameter}")
     if not (self.cd > 0):
       raise ValueError(f"cd must be positive, got {self.cd}")
 
+  # Calculating the effective drag are
+  # Drag coefficient multiplied by the area
   @property
   def cds(self):
     return self.cd * (np.pi * self.diameter**2 / 4.0)
@@ -72,6 +75,7 @@ class DescentConfig:
   wind: object = field(default_factory=ConstantWind)
   g: float = G0
 
+  # Checking mass is positive
   def __post_init__(self):
     if not (self.mass > 0):
       raise ValueError(f"mass must be positive, got {self.mass}")
@@ -102,24 +106,26 @@ def descent_rhs(t, y, mass, cds, atmosphere, wind, g=G0):
   numpy.ndarray
     [vx, vy, vz, ax, ay, az].
   """
-  # Unpack the state. Slices are views (no copying), so this is cheap.
+
+
+  # Extracting altitude and the three velocity components
   z = y[2]
   vel = y[3:6]
 
-  # Adaptive solvers evaluate trial stages that can land below the ground
-  # before the ground event stops the integration (in uniform motion the step
-  # size can grow to hundreds of seconds). The atmosphere model rightly refuses
-  # altitudes far below the pad, so look up air properties at max(z, 0).
-  # This only affects points the solver is about to discard. A good example
-  # for "which part of your solution is vulnerable to numerical failure?"
   z_air = max(z, 0.0)
 
+  # Local air density and horizontal wind velocity for a given altitude
   rho = atmosphere.density(z_air)
   w = wind.velocity(z_air)
-  wind_3d = np.array([w[0], w[1], 0.0], dtype=float)
-  v_rel = vel - wind_3d
 
+  # Wind as a 3D vector
+  wind_3d = np.array([w[0], w[1], 0.0], dtype=float)
+
+  # Velocity of the parachute relative to the airflow velocity
+  v_rel = vel - wind_3d
   v_rel_norm = np.linalg.norm(v_rel)
+
+  # Acceleration due to aerodynamic drag
   drag_acc = -0.5 * rho * cds * v_rel_norm * v_rel / mass
 
   acc = drag_acc.copy()
@@ -130,7 +136,7 @@ def descent_rhs(t, y, mass, cds, atmosphere, wind, g=G0):
 
 def _altitude_crossing(target):
   """
-  Making a solve_ivp event function that triggers when z falls through ``target``.
+  Making a solve_ivp event function that triggers when z falls through target.
   """
 
   def event(t, y, *args):
@@ -199,14 +205,20 @@ def simulate_descent(config, y0, t0=0.0, t_max=2000.0, method="RK45",
   ValueError
       If the starting altitude is below the ground (z < 0).
   """
+
+  # Converting the initial state to an array for numerical integration
   y0 = np.asarray(y0, dtype=float)
+
+  # REject initial state below ground level
   if y0[2] < 0:
     raise ValueError(f"starting altitude must be >= 0, got {y0[2]}")
-
+  
+  # Defining the terminal events for touchdown and mains parachute deployment
   ground = _altitude_crossing(0.0)
   deploy = _altitude_crossing(config.main_deploy_alt)
   solver_kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step)
 
+  # Separate time and state arrays for each stage
   t_parts, y_parts, nfev = [], [], 0
   t_main = None
   t_start, y_start = t0, y0
@@ -221,10 +233,14 @@ def simulate_descent(config, y0, t0=0.0, t_max=2000.0, method="RK45",
       args=(config.mass, config.drogue.cds, config.atmosphere, config.wind, config.g),
       events=[deploy, ground],
       **solver_kw,)
+    # Saving the stage's time samples
     t_parts.append(sol.t)
     y_parts.append(sol.y.T)
+
+    # Accumulating the number of derivative evaluations
     nfev += sol.nfev
 
+    # Checking if the mains deployment altitude has been reached
     if len(sol.t_events[0]) > 0:
       t_main = float(sol.t_events[0][0])
       t_start = t_main
@@ -244,6 +260,7 @@ def simulate_descent(config, y0, t0=0.0, t_max=2000.0, method="RK45",
   y_parts.append(sol.y.T)
   nfev += sol.nfev
 
+  # Combining the drogue and mains stage results
   return _assemble(t_parts, y_parts, t_main, sol.t_events[0], nfev)
 
 
