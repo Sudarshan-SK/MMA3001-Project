@@ -22,6 +22,7 @@ def bearing_deg(east, north):
   Function to get the bearing of a displacement, degrees clockwise from North.
 
   """
+  # Calculating the bearinf from north and east displacement components
   return float(np.degrees(np.arctan2(east, north)) % 360)
 
 
@@ -43,7 +44,10 @@ def hand_calc_drift(apogee_alt, main_alt, v_drogue, v_main, wind_uv):
   t_descent: float
     Total descent time [s].
   """
+  # Estimate the descent duration for each parachute stage
   t_descent = (apogee_alt - main_alt) / v_drogue + main_alt / v_main
+
+  # Assuming horizontal wind is constant throughout the descent
   return np.asarray(wind_uv, dtype=float) * t_descent, float(t_descent)
 
 
@@ -70,6 +74,8 @@ def gps_wind_profile(t, east, north, alt, bin_m=250.0, min_points=5):
   t, east, north, alt = (np.asarray(a, dtype=float) for a in (t, east, north, alt))
   heights, us, vs = [], [], []
   edges = np.arange(0.0, alt.max() + bin_m, bin_m)
+
+  # Processing each altitude interval separately
   for lo, hi in zip(edges[:-1], edges[1:]):
     m = (alt >= lo) & (alt < hi)
     if m.sum() < min_points:
@@ -90,10 +96,12 @@ def landing_error(predicted_en, measured_en):
     bearing error in deg.
     range error in m.
   """
+  # Converting predicted and measured coordinates to arrays
   p, m = np.asarray(predicted_en, dtype=float), np.asarray(measured_en, dtype=float)
   d_bearing = (bearing_deg(*p) - bearing_deg(*m) + 180.0) % 360.0 - 180.0
   return {
     "distance": float(np.hypot(*(p - m))),
     "bearing_error": float(d_bearing),
     "range_error": float(np.hypot(*p) - np.hypot(*m)),}
+
 
